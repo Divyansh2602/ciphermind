@@ -1102,3 +1102,14 @@
     .msg-bubble, .chip, .connect-btn { transition: none; }
   }
   
+  /* Streaming cursor */
+.streaming-bubble::after {
+  content: '▋';
+  color: var(--accent);
+  animation: cursorBlink 0.7s ease infinite;
+  margin-left: 2px;
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}

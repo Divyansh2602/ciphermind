@@ -253,6 +253,36 @@ const UI = (() => {
       .replace(/\n/g, '<br>');
   }
 
+  function renderStreamingMessage() {
+    const list = document.getElementById('messages-list');
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.style.display = 'none';
+
+    const div = document.createElement('div');
+    div.className = 'message ai';
+    div.innerHTML = `
+      <div class="msg-avatar">🤖</div>
+      <div class="msg-body">
+        <div class="msg-meta">
+          <span class="msg-name">CipherMind</span>
+          <span class="msg-time">${formatTime()}</span>
+        </div>
+        <div class="msg-bubble streaming-bubble" id="streaming-bubble"></div>
+      </div>
+    `;
+    list.appendChild(div);
+    list.parentElement.scrollTop = list.parentElement.scrollHeight;
+    return div;
+  }
+
+  function appendStreamToken(div, token) {
+    const bubble = div.querySelector('.streaming-bubble');
+    if (!bubble) return;
+    bubble.innerHTML = escapeHtml(bubble.innerText + token);
+    bubble.parentElement.parentElement.parentElement.scrollTop =
+      bubble.parentElement.parentElement.parentElement.scrollHeight;
+  }
+  
   return {
     runBootSequence,
     animatePipeline,
@@ -263,6 +293,8 @@ const UI = (() => {
     renderThinking,
     removeThinking,
     openInspector,
+    renderStreamingMessage,
+    appendStreamToken,
   };
 })();
 

@@ -179,15 +179,59 @@ const App = (() => {
     conversationHistory.push({ role: 'user', content: text });
 
     // Call API
-    let aiText;
+    // Call API
+    let aiText = '';
     try {
-      const data = await callAPI(conversationHistory);
-      aiText = data.choices[0]?.message?.content || 'No response.';
-      UI.bumpStat('tokens', data.usage?.total_tokens || 1);
+      const result = await callAPI(conversationHistory);
+      const t1 = Date.now();
 
-      // Show response time
-      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-      document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
+      // Handle streaming
+      if (result instanceof Response) {
+        thinking.stop();
+        UI.removeThinking();
+
+        // Create AI bubble early for streaming into
+        const streamDiv = UI.renderStreamingMessage();
+        const reader = result.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
+
+          for (const line of lines) {
+            const data = line.replace('data: ', '').trim();
+            if (data === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(data);
+              const token = parsed.choices[0]?.delta?.content || '';
+              if (token) {
+                aiText += token;
+                UI.appendStreamToken(streamDiv, token);
+              }
+              const totalTokens = parsed.x_groq?.usage?.completion_tokens;
+              if (totalTokens) UI.bumpStat('tokens', totalTokens);
+            } catch {}
+          }
+        }
+
+        const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
+        document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
+
+      } else {
+        // Non-streaming fallback
+        aiText = result.choices[0]?.message?.content || 'No response.';
+        UI.bumpStat('tokens', result.usage?.total_tokens || 1);
+        const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
+        document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
+        thinking.stop();
+        UI.removeThinking();
+        UI.renderMessage({ role: 'ai', text: aiText, cipherHex: null, fullData: null });
+      }
+
     } catch (e) {
       thinking.stop();
       UI.removeThinking();
@@ -213,24 +257,6 @@ const App = (() => {
     }
 
     const aiHash = await CryptoEngine.sha256(aiText);
-
-    thinking.stop();
-    UI.removeThinking();
-
-    UI.renderMessage({
-      role: 'ai',
-      text: aiText,
-      cipherHex: aiEnc.cipherHex,
-      fullData: {
-        role: 'ai',
-        ivHex: aiEnc.fullIv,
-        cipherHex: aiEnc.fullCipher,
-        hmacHex: aiEnc.fullHmac,
-        plaintextHash: aiHash,
-        timestamp: new Date().toISOString()
-      }
-    });
-
     conversationHistory.push({ role: 'assistant', content: aiText });
 
     isSending = false;
@@ -239,7 +265,6 @@ const App = (() => {
 
   // ── API Call ──────────────────────────────────────────────────────────
   async function callAPI(messages) {
-    // Use backend if configured, otherwise call Groq directly
     if (CONFIG.BACKEND_URL) {
       const res = await fetch(`${CONFIG.BACKEND_URL}/api/chat`, {
         method: 'POST',
@@ -252,11 +277,10 @@ const App = (() => {
       }
       return res.json();
     }
-
-    // Direct Groq call
+  
     const SYSTEM = `You are CipherMind, a smart and friendly AI assistant inside an encrypted chat app.
-Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.`;
-
+  Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.`;
+  
     const res = await fetch(CONFIG.GROQ_DIRECT_URL, {
       method: 'POST',
       headers: {
@@ -266,18 +290,20 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
       body: JSON.stringify({
         model: selectedModel,
         max_tokens: 1024,
+        stream: true,
         messages: [
           { role: 'system', content: SYSTEM },
           ...messages,
         ],
       }),
     });
-
+  
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error?.message || `HTTP ${res.status}`);
     }
-    return res.json();
+  
+    return res;
   }
 
   // ── Export ────────────────────────────────────────────────────────────
