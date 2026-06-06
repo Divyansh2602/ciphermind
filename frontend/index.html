@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CipherMind — Encrypted AI Chat</title>
+  <link rel="stylesheet" href="styles/main.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+
+  <!-- Animated soft background -->
+  <div class="bg-orbs">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <!-- Boot/splash screen -->
+  <div id="boot-screen">
+    <div class="boot-card">
+      <div class="boot-logo">
+        <span class="boot-icon">🔐</span>
+        <span class="boot-name">CipherMind</span>
+      </div>
+      <p class="boot-tagline">Setting up your secure session...</p>
+      <div class="boot-steps" id="boot-steps"></div>
+      <div class="boot-bar-wrap">
+        <div class="boot-bar-fill" id="boot-progress"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden">
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="brand">
+          <span class="brand-icon">🔐</span>
+          <div>
+            <div class="brand-name">CipherMind</div>
+            <div class="brand-sub">Encrypted AI Chat</div>
+          </div>
+        </div>
+
+        <div class="connect-box">
+          <label class="connect-label">Groq API Key</label>
+          <div class="connect-row">
+            <input type="password" id="api-key-input" placeholder="gsk_..." class="key-input" />
+            <button id="set-key-btn" class="connect-btn">Connect</button>
+          </div>
+          <div class="connect-hint" id="connect-hint">Get a free key at console.groq.com</div>
+        </div>
+
+        <div class="model-box">
+          <label class="connect-label">Model</label>
+          <select id="model-select" class="model-select">
+            <option value="llama-3.3-70b-versatile">⚡ Llama 3.3 70B — Best quality</option>
+            <option value="llama-3.1-8b-instant">🚀 Llama 3.1 8B — Fastest</option>
+            <option value="mixtral-8x7b-32768">🧠 Mixtral 8x7B — Smart</option>
+            <option value="gemma2-9b-it">✨ Gemma2 9B — Concise</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="sidebar-mid">
+        <div class="section-label">This Session</div>
+
+        <div class="session-key-card">
+          <div class="sk-header">
+            <span class="sk-label">🔑 Session Key</span>
+            <span class="sk-badge">AES-256</span>
+          </div>
+          <div class="sk-value" id="session-key-display">Generating...</div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-num" id="stat-enc">0</div>
+            <div class="stat-name">Encrypted</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="stat-dec">0</div>
+            <div class="stat-name">Decrypted</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="stat-tokens">0</div>
+            <div class="stat-name">Tokens</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-num" id="stat-hmac">0</div>
+            <div class="stat-name">HMAC checks</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sidebar-bottom">
+        <button class="side-btn" id="export-btn">↓ Export chat</button>
+        <button class="side-btn side-btn-danger" id="clear-btn">🗑 Clear session</button>
+      </div>
+    </aside>
+
+    <!-- Chat panel -->
+    <main class="chat-panel">
+
+      <!-- Header bar -->
+      <div class="chat-header">
+        <div class="chat-header-left">
+          <div class="online-dot"></div>
+          <span class="chat-header-title">Secure channel active</span>
+          <span class="chat-header-algo">AES-256-GCM · HMAC-SHA512 · PBKDF2</span>
+        </div>
+        <div class="chat-header-right">
+          <div class="speed-badge" id="speed-badge">—</div>
+        </div>
+      </div>
+
+      <!-- Pipeline bar -->
+      <div class="pipeline-bar" id="pipeline-bar">
+        <div class="pipe-step" id="ps-1" title="Your text">✍️ Write</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-2" title="PBKDF2 key derive">🧬 Derive Key</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-3" title="AES-256-GCM encrypt">🔐 Encrypt</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-4" title="HMAC-SHA512 sign">🛡 Sign</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-5" title="Send to Groq">📡 Send</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-6" title="Groq AI processing">⚡ Groq AI</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-7" title="Decrypt response">🔓 Decrypt</div>
+        <div class="pipe-arrow">›</div>
+        <div class="pipe-step" id="ps-8" title="Done!">✅ Done</div>
+      </div>
+
+      <!-- Messages -->
+      <div class="messages-area" id="messages-area">
+
+        <!-- Welcome state -->
+        <div class="welcome" id="welcome">
+          <div class="welcome-emoji">👋</div>
+          <h2 class="welcome-title">Hey there!</h2>
+          <p class="welcome-text">This is CipherMind — your messages are encrypted with <strong>AES-256-GCM</strong> before anything leaves your browser. Connect your Groq key and start chatting.</p>
+          <div class="welcome-chips">
+            <button class="chip" onclick="fillInput('Explain AES-256 encryption in simple terms')">What is AES-256?</button>
+            <button class="chip" onclick="fillInput('Write a Python function to reverse a linked list')">Write some code</button>
+            <button class="chip" onclick="fillInput('What makes HMAC better than a simple hash for integrity checks?')">Why HMAC?</button>
+            <button class="chip" onclick="fillInput('Explain how PBKDF2 key derivation works')">How does PBKDF2 work?</button>
+          </div>
+        </div>
+
+        <div id="messages-list"></div>
+      </div>
+
+      <!-- Input area -->
+      <div class="input-zone">
+        <div class="enc-live" id="enc-live"></div>
+        <div class="input-row">
+          <textarea
+            id="user-input"
+            placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+            rows="1"
+          ></textarea>
+          <button id="send-btn" class="send-btn" disabled title="Send message">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
+        <div class="input-footer">
+          <span id="char-count">0 chars</span>
+          <span class="input-enc-note">🔐 Encrypted end-to-end</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- Crypto Inspector drawer -->
+    <div class="inspector-drawer" id="inspector-drawer">
+      <div class="drawer-handle" id="drawer-handle">
+        <span>🔬 Crypto Inspector</span>
+        <button class="drawer-close" id="drawer-close">✕</button>
+      </div>
+      <div class="drawer-body" id="drawer-body">
+        <p class="drawer-hint">Click any message to inspect its cryptographic details.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast container -->
+  <div id="toasts"></div>
+
+  <script src="src/config.js"></script>
+  <script src="src/crypto.js"></script>
+  <script src="src/ui.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
