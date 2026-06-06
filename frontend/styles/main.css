@@ -1102,14 +1102,72 @@
     .msg-bubble, .chip, .connect-btn { transition: none; }
   }
   
+  /* ── File Upload ── */
+  .upload-btn {
+    width: 46px; height: 46px;
+    min-width: 46px;
+    background: var(--surface2);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .upload-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+  .upload-btn:active { transform: scale(0.95); }
+  .upload-btn.has-file { border-color: var(--green); color: var(--green); background: var(--green-light); }
+  
+  .file-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--accent-light);
+    border: 1.5px solid #c7d2fe;
+    border-radius: var(--radius-sm);
+    padding: 7px 12px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .file-preview-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .file-preview-remove {
+    background: none;
+    border: none;
+    color: var(--text-4);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: color 0.15s;
+  }
+  .file-preview-remove:hover { color: var(--red); }
+  
   /* Streaming cursor */
-.streaming-bubble::after {
-  content: '▋';
-  color: var(--accent);
-  animation: cursorBlink 0.7s ease infinite;
-  margin-left: 2px;
-}
-@keyframes cursorBlink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
+  .streaming-bubble::after {
+    content: '▋';
+    color: var(--accent);
+    animation: cursorBlink 0.7s ease infinite;
+    margin-left: 2px;
+  }
+  @keyframes cursorBlink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  
+  @media (max-width: 599px) {
+    .upload-btn { width: 42px; height: 42px; min-width: 42px; }
+    .file-preview { font-size: 12px; padding: 6px 10px; }
+  }

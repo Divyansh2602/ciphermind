@@ -1,8 +1,6 @@
 /**
  * CipherMind — Frontend App
- * Works in two modes:
- *   1. Backend mode: requests go through your Render backend (API key server-side)
- *   2. Direct mode:  calls Groq directly from browser (API key entered in UI)
+ * Features: Streaming, File Upload, Mobile Sidebar, Crypto
  */
 
 const App = (() => {
@@ -117,8 +115,90 @@ const App = (() => {
     });
 
     exportBtn.addEventListener('click', exportChat);
+
     drawerClose.addEventListener('click', () => {
       document.getElementById('app').classList.remove('drawer-open');
+    });
+
+    // ── File Upload ────────────────────────────────────────────────────
+    const fileInput = document.getElementById('file-input');
+    const uploadBtn = document.getElementById('upload-btn');
+    let attachedFile = null;
+    let attachedFileContent = '';
+    let attachedFileName = '';
+
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        UI.toast('File too large. Max 5MB.', 'error');
+        return;
+      }
+
+      attachedFileName = file.name;
+      UI.toast(`Reading ${file.name}...`, 'info');
+
+      try {
+        if (file.type === 'application/pdf') {
+          attachedFileContent = await extractPDF(file);
+        } else if (file.type.startsWith('image/')) {
+          attachedFileContent = await extractImage(file);
+        } else {
+          attachedFileContent = await extractText(file);
+        }
+
+        attachedFile = file;
+        uploadBtn.classList.add('has-file');
+        showFilePreview(attachedFileName);
+        UI.toast(`✅ ${file.name} ready`, 'success');
+      } catch (e) {
+        UI.toast('Could not read file: ' + e.message, 'error');
+      }
+
+      fileInput.value = '';
+    });
+
+    function showFilePreview(name) {
+      removeFilePreview();
+      const preview = document.createElement('div');
+      preview.className = 'file-preview';
+      preview.id = 'file-preview';
+      preview.innerHTML = `
+        <span>📎</span>
+        <span class="file-preview-name">${name}</span>
+        <button class="file-preview-remove" id="remove-file">✕</button>
+      `;
+      document.querySelector('.input-zone').insertBefore(
+        preview,
+        document.querySelector('.enc-live')
+      );
+      document.getElementById('remove-file').addEventListener('click', clearFile);
+    }
+
+    function removeFilePreview() {
+      const existing = document.getElementById('file-preview');
+      if (existing) existing.remove();
+    }
+
+    function clearFile() {
+      attachedFile = null;
+      attachedFileContent = '';
+      attachedFileName = '';
+      uploadBtn.classList.remove('has-file');
+      removeFilePreview();
+    }
+
+    // Expose to sendMessage scope
+    window._clearFile = clearFile;
+    window._getFileContent = () => ({
+      content: attachedFileContent,
+      name: attachedFileName,
+      hasFile: !!attachedFile,
+      type: attachedFile?.type
     });
   }
 
@@ -130,8 +210,14 @@ const App = (() => {
     }
 
     const input = document.getElementById('user-input');
-    const text = input.value.trim();
-    if (!text) return;
+    const rawText = input.value.trim();
+    const fileInfo = window._getFileContent ? window._getFileContent() : { hasFile: false };
+
+    if (!rawText && !fileInfo.hasFile) return;
+    if (!rawText && fileInfo.hasFile) {
+      UI.toast('Add a message about the file', 'info');
+      return;
+    }
 
     isSending = true;
     input.value = '';
@@ -149,20 +235,21 @@ const App = (() => {
     // Encrypt user message
     let encResult;
     try {
-      encResult = await CryptoEngine.encrypt(text);
+      encResult = await CryptoEngine.encrypt(rawText);
       UI.bumpStat('enc');
     } catch (e) {
       UI.toast('Encryption error: ' + e.message, 'error');
       isSending = false;
+      document.getElementById('send-btn').classList.remove('sending');
       return;
     }
 
-    const plaintextHash = await CryptoEngine.sha256(text);
+    const plaintextHash = await CryptoEngine.sha256(rawText);
 
-    // Render user message
+    // Render user message (show filename if file attached)
     UI.renderMessage({
       role: 'user',
-      text,
+      text: fileInfo.hasFile ? `📎 ${fileInfo.name}\n\n${rawText}` : rawText,
       cipherHex: encResult.cipherHex,
       fullData: {
         role: 'user',
@@ -174,23 +261,33 @@ const App = (() => {
       }
     });
 
-    // Show thinking
-    const thinking = UI.renderThinking();
-    conversationHistory.push({ role: 'user', content: text });
+    // Build message content with file context
+    let messageContent = rawText;
+    if (fileInfo.hasFile) {
+      if (fileInfo.type?.startsWith('image/')) {
+        messageContent = `[Image attached: ${fileInfo.name}]\n\nUser says: ${rawText}`;
+      } else {
+        messageContent = `[File attached: ${fileInfo.name}]\n\nFile contents:\n\`\`\`\n${fileInfo.content.substring(0, 8000)}\n\`\`\`\n\nUser question: ${rawText}`;
+      }
+      window._clearFile?.();
+    }
 
-    // Call API
+    conversationHistory.push({ role: 'user', content: messageContent });
+
+    // Show thinking indicator
+    const thinking = UI.renderThinking();
+
     // Call API
     let aiText = '';
     try {
       const result = await callAPI(conversationHistory);
       const t1 = Date.now();
 
-      // Handle streaming
       if (result instanceof Response) {
+        // ── Streaming response ──────────────────────────────────────────
         thinking.stop();
         UI.removeThinking();
 
-        // Create AI bubble early for streaming into
         const streamDiv = UI.renderStreamingMessage();
         const reader = result.body.getReader();
         const decoder = new TextDecoder();
@@ -222,7 +319,7 @@ const App = (() => {
         document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
 
       } else {
-        // Non-streaming fallback
+        // ── Non-streaming fallback ──────────────────────────────────────
         aiText = result.choices[0]?.message?.content || 'No response.';
         UI.bumpStat('tokens', result.usage?.total_tokens || 1);
         const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
@@ -245,18 +342,14 @@ const App = (() => {
       return;
     }
 
-    // Encrypt AI response for display
-    let aiEnc;
+    // Encrypt AI response for stats/display
     try {
-      aiEnc = await CryptoEngine.encrypt(aiText);
+      await CryptoEngine.encrypt(aiText);
       UI.bumpStat('enc');
       UI.bumpStat('dec');
       UI.bumpStat('hmac');
-    } catch {
-      aiEnc = { cipherHex: 'N/A', fullIv: 'N/A', fullHmac: 'N/A', fullCipher: 'N/A' };
-    }
+    } catch {}
 
-    const aiHash = await CryptoEngine.sha256(aiText);
     conversationHistory.push({ role: 'assistant', content: aiText });
 
     isSending = false;
@@ -265,6 +358,7 @@ const App = (() => {
 
   // ── API Call ──────────────────────────────────────────────────────────
   async function callAPI(messages) {
+    // Backend proxy mode
     if (CONFIG.BACKEND_URL) {
       const res = await fetch(`${CONFIG.BACKEND_URL}/api/chat`, {
         method: 'POST',
@@ -277,10 +371,11 @@ const App = (() => {
       }
       return res.json();
     }
-  
+
+    // Direct Groq mode with streaming
     const SYSTEM = `You are CipherMind, a smart and friendly AI assistant inside an encrypted chat app.
-  Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.`;
-  
+Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.`;
+
     const res = await fetch(CONFIG.GROQ_DIRECT_URL, {
       method: 'POST',
       headers: {
@@ -297,13 +392,62 @@ const App = (() => {
         ],
       }),
     });
-  
+
     if (!res.ok) {
       const err = await res.json();
       throw new Error(err.error?.message || `HTTP ${res.status}`);
     }
-  
-    return res;
+
+    return res; // Return raw Response for streaming
+  }
+
+  // ── File Extractors ───────────────────────────────────────────────────
+  function extractText(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  }
+
+  function extractImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Failed to read image'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function extractPDF(file) {
+    if (!window.pdfjsLib) {
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let text = '';
+
+    for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      text += content.items.map(item => item.str).join(' ') + '\n';
+    }
+
+    return text.trim() || 'Could not extract text from this PDF.';
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src;
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
   }
 
   // ── Export ────────────────────────────────────────────────────────────
@@ -334,7 +478,7 @@ const App = (() => {
   return { init };
 })();
 
-// ── Global helper for suggestion chips ──────────────────────────────────
+// ── Global helper for suggestion chips ───────────────────────────────────
 function fillInput(text) {
   const input = document.getElementById('user-input');
   input.value = text;
@@ -346,7 +490,7 @@ function fillInput(text) {
 document.addEventListener('DOMContentLoaded', () => App.init());
 
 // ── Mobile Sidebar Toggle ─────────────────────────────────────────────────
-(function() {
+(function () {
   const toggle = document.getElementById('sidebar-toggle');
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
@@ -366,7 +510,6 @@ document.addEventListener('DOMContentLoaded', () => App.init());
   toggle.addEventListener('click', openSidebar);
   overlay.addEventListener('click', closeSidebar);
 
-  // Close sidebar when connect button tapped on mobile
   document.getElementById('set-key-btn')?.addEventListener('click', () => {
     if (window.innerWidth < 600) closeSidebar();
   });
