@@ -24,7 +24,7 @@ const App = (() => {
         UI.toast('Crypto init failed: ' + e.message, 'error');
       }
 
-      // If backend URL is configured, skip asking for API key
+      // If backend URL configured, skip API key input
       if (CONFIG.BACKEND_URL) {
         apiKey = '__backend__';
         document.getElementById('set-key-btn').textContent = '✓ Via backend';
@@ -51,7 +51,7 @@ const App = (() => {
     const exportBtn = document.getElementById('export-btn');
     const drawerClose = document.getElementById('drawer-close');
 
-    // API Key connect
+    // API Key
     setKeyBtn.addEventListener('click', connectKey);
     apiInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connectKey(); });
 
@@ -78,12 +78,11 @@ const App = (() => {
       UI.toast(`Model: ${modelSelect.options[modelSelect.selectedIndex].text.split('—')[0].trim()}`, 'info');
     });
 
-    // Input
+    // Input typing
     input.addEventListener('input', async () => {
       UI.autoResize(input);
       document.getElementById('char-count').textContent = `${input.value.length} chars`;
 
-      // Live encryption preview
       const encLive = document.getElementById('enc-live');
       if (input.value.length > 2) {
         try {
@@ -123,9 +122,14 @@ const App = (() => {
     // ── File Upload ────────────────────────────────────────────────────
     const fileInput = document.getElementById('file-input');
     const uploadBtn = document.getElementById('upload-btn');
+    const filePreview = document.getElementById('file-preview');
+    const filePreviewName = document.getElementById('file-preview-name');
+    const removeFileBtn = document.getElementById('remove-file');
+
     let attachedFile = null;
     let attachedFileContent = '';
     let attachedFileName = '';
+    let attachedFileType = '';
 
     uploadBtn.addEventListener('click', () => fileInput.click());
 
@@ -133,28 +137,34 @@ const App = (() => {
       const file = fileInput.files[0];
       if (!file) return;
 
-      const maxSize = 5 * 1024 * 1024; // 5MB
-      if (file.size > maxSize) {
-        UI.toast('File too large. Max 5MB.', 'error');
+      if (file.size > 5 * 1024 * 1024) {
+        UI.toast('File too large — max 5MB', 'error');
+        fileInput.value = '';
         return;
       }
 
-      attachedFileName = file.name;
       UI.toast(`Reading ${file.name}...`, 'info');
 
       try {
+        let content = '';
         if (file.type === 'application/pdf') {
-          attachedFileContent = await extractPDF(file);
+          content = await extractPDF(file);
         } else if (file.type.startsWith('image/')) {
-          attachedFileContent = await extractImage(file);
+          content = await extractImage(file);
         } else {
-          attachedFileContent = await extractText(file);
+          content = await extractText(file);
         }
 
         attachedFile = file;
+        attachedFileContent = content;
+        attachedFileName = file.name;
+        attachedFileType = file.type;
+
+        // Show preview bar
+        filePreviewName.textContent = file.name;
+        filePreview.style.display = 'flex';
         uploadBtn.classList.add('has-file');
-        showFilePreview(attachedFileName);
-        UI.toast(`✅ ${file.name} ready`, 'success');
+        UI.toast(`✅ ${file.name} attached`, 'success');
       } catch (e) {
         UI.toast('Could not read file: ' + e.message, 'error');
       }
@@ -162,43 +172,24 @@ const App = (() => {
       fileInput.value = '';
     });
 
-    function showFilePreview(name) {
-      removeFilePreview();
-      const preview = document.createElement('div');
-      preview.className = 'file-preview';
-      preview.id = 'file-preview';
-      preview.innerHTML = `
-        <span>📎</span>
-        <span class="file-preview-name">${name}</span>
-        <button class="file-preview-remove" id="remove-file">✕</button>
-      `;
-      document.querySelector('.input-zone').insertBefore(
-        preview,
-        document.querySelector('.enc-live')
-      );
-      document.getElementById('remove-file').addEventListener('click', clearFile);
-    }
+    removeFileBtn.addEventListener('click', clearAttachment);
 
-    function removeFilePreview() {
-      const existing = document.getElementById('file-preview');
-      if (existing) existing.remove();
-    }
-
-    function clearFile() {
+    function clearAttachment() {
       attachedFile = null;
       attachedFileContent = '';
       attachedFileName = '';
+      attachedFileType = '';
+      filePreview.style.display = 'none';
+      filePreviewName.textContent = '';
       uploadBtn.classList.remove('has-file');
-      removeFilePreview();
     }
 
-    // Expose to sendMessage scope
-    window._clearFile = clearFile;
+    window._clearFile = clearAttachment;
     window._getFileContent = () => ({
       content: attachedFileContent,
       name: attachedFileName,
       hasFile: !!attachedFile,
-      type: attachedFile?.type
+      type: attachedFileType
     });
   }
 
@@ -227,9 +218,7 @@ const App = (() => {
     document.getElementById('enc-live').classList.remove('active');
     document.getElementById('send-btn').classList.add('sending');
 
-    // Animate pipeline
     UI.animatePipeline(4000);
-
     const t0 = Date.now();
 
     // Encrypt user message
@@ -246,7 +235,7 @@ const App = (() => {
 
     const plaintextHash = await CryptoEngine.sha256(rawText);
 
-    // Render user message (show filename if file attached)
+    // Render user message
     UI.renderMessage({
       role: 'user',
       text: fileInfo.hasFile ? `📎 ${fileInfo.name}\n\n${rawText}` : rawText,
@@ -261,20 +250,19 @@ const App = (() => {
       }
     });
 
-    // Build message content with file context
+    // Build message with file context
     let messageContent = rawText;
     if (fileInfo.hasFile) {
       if (fileInfo.type?.startsWith('image/')) {
         messageContent = `[Image attached: ${fileInfo.name}]\n\nUser says: ${rawText}`;
       } else {
-        messageContent = `[File attached: ${fileInfo.name}]\n\nFile contents:\n\`\`\`\n${fileInfo.content.substring(0, 8000)}\n\`\`\`\n\nUser question: ${rawText}`;
+        messageContent = `[File: ${fileInfo.name}]\n\nContents:\n\`\`\`\n${fileInfo.content.substring(0, 8000)}\n\`\`\`\n\nQuestion: ${rawText}`;
       }
       window._clearFile?.();
     }
 
     conversationHistory.push({ role: 'user', content: messageContent });
 
-    // Show thinking indicator
     const thinking = UI.renderThinking();
 
     // Call API
@@ -284,7 +272,7 @@ const App = (() => {
       const t1 = Date.now();
 
       if (result instanceof Response) {
-        // ── Streaming response ──────────────────────────────────────────
+        // Streaming
         thinking.stop();
         UI.removeThinking();
 
@@ -319,7 +307,7 @@ const App = (() => {
         document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
 
       } else {
-        // ── Non-streaming fallback ──────────────────────────────────────
+        // Non-streaming fallback
         aiText = result.choices[0]?.message?.content || 'No response.';
         UI.bumpStat('tokens', result.usage?.total_tokens || 1);
         const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
@@ -342,7 +330,7 @@ const App = (() => {
       return;
     }
 
-    // Encrypt AI response for stats/display
+    // Bump crypto stats
     try {
       await CryptoEngine.encrypt(aiText);
       UI.bumpStat('enc');
@@ -351,14 +339,12 @@ const App = (() => {
     } catch {}
 
     conversationHistory.push({ role: 'assistant', content: aiText });
-
     isSending = false;
     document.getElementById('send-btn').classList.remove('sending');
   }
 
   // ── API Call ──────────────────────────────────────────────────────────
   async function callAPI(messages) {
-    // Backend proxy mode
     if (CONFIG.BACKEND_URL) {
       const res = await fetch(`${CONFIG.BACKEND_URL}/api/chat`, {
         method: 'POST',
@@ -372,7 +358,6 @@ const App = (() => {
       return res.json();
     }
 
-    // Direct Groq mode with streaming
     const SYSTEM = `You are CipherMind, a smart and friendly AI assistant inside an encrypted chat app.
 Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.`;
 
@@ -398,7 +383,7 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
       throw new Error(err.error?.message || `HTTP ${res.status}`);
     }
 
-    return res; // Return raw Response for streaming
+    return res;
   }
 
   // ── File Extractors ───────────────────────────────────────────────────
@@ -426,17 +411,14 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
       window.pdfjsLib.GlobalWorkerOptions.workerSrc =
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     }
-
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     let text = '';
-
     for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
       text += content.items.map(item => item.str).join(' ') + '\n';
     }
-
     return text.trim() || 'Could not extract text from this PDF.';
   }
 
