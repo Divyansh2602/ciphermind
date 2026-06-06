@@ -9,7 +9,7 @@
 
 **A production-ready, end-to-end encrypted AI chatbot built with real browser-native cryptography and Groq's ultra-fast inference engine. Every single message is AES-256-GCM encrypted before it leaves your browser.**
 
-[🌐 Live Demo](https://ciphermind.vercel.app) · [⚙️ Backend API](https://ciphermind-backend.onrender.com) · [📖 Documentation](#documentation)
+[🌐 Live Demo](https://ciphermind-frontend.vercel.app/) · [⚙️ Backend API](https://ciphermind-backend.onrender.com) · [📖 Documentation](#documentation)
 
 </div>
 
