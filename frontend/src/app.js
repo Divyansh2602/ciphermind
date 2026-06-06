@@ -1,6 +1,6 @@
 /**
  * CipherMind — Frontend App
- * Features: Streaming, File Upload, Mobile Sidebar, Crypto
+ * Features: Streaming, File Upload, Chat History, Multiple Chats, Mobile Sidebar
  */
 
 const App = (() => {
@@ -8,6 +8,151 @@ const App = (() => {
   let selectedModel = 'llama-3.3-70b-versatile';
   let conversationHistory = [];
   let isSending = false;
+
+  // ── Chat History State ─────────────────────────────────────────────────
+  let currentChatId = null;
+  const STORAGE_KEY = 'ciphermind_chats';
+
+  function generateId() {
+    return 'chat_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+  }
+
+  function getAllChats() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    } catch { return []; }
+  }
+
+  function saveAllChats(chats) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(chats));
+  }
+
+  function saveCurrentChat() {
+    if (!currentChatId || !conversationHistory.length) return;
+    const chats = getAllChats();
+    const idx = chats.findIndex(c => c.id === currentChatId);
+    const title = conversationHistory[0]?.content?.substring(0, 36) || 'New Chat';
+    const chatData = {
+      id: currentChatId,
+      title: title.length > 35 ? title.substring(0, 35) + '...' : title,
+      updatedAt: new Date().toISOString(),
+      messages: conversationHistory
+    };
+    if (idx >= 0) chats[idx] = chatData;
+    else chats.unshift(chatData);
+    saveAllChats(chats);
+    renderChatList();
+  }
+
+  function startNewChat() {
+    currentChatId = generateId();
+    conversationHistory = [];
+    document.getElementById('messages-list').innerHTML = '';
+    document.getElementById('welcome').style.display = '';
+    document.getElementById('speed-badge').textContent = '—';
+    renderChatList();
+    UI.toast('New chat started', 'info');
+  }
+
+  function loadChat(id) {
+    const chats = getAllChats();
+    const chat = chats.find(c => c.id === id);
+    if (!chat) return;
+
+    currentChatId = id;
+    conversationHistory = chat.messages || [];
+
+    // Clear and re-render messages
+    document.getElementById('messages-list').innerHTML = '';
+    document.getElementById('welcome').style.display = 'none';
+
+    conversationHistory.forEach(msg => {
+      UI.renderMessage({
+        role: msg.role === 'user' ? 'user' : 'ai',
+        text: msg.content,
+        cipherHex: null,
+        fullData: null
+      });
+    });
+
+    renderChatList();
+    UI.toast(`Loaded: ${chat.title}`, 'info');
+
+    // Scroll to bottom
+    setTimeout(() => {
+      const area = document.getElementById('messages-area');
+      area.scrollTop = area.scrollHeight;
+    }, 100);
+  }
+
+  function deleteChat(id) {
+    const chats = getAllChats().filter(c => c.id !== id);
+    saveAllChats(chats);
+
+    // If deleting current chat, start a new one
+    if (id === currentChatId) startNewChat();
+    else renderChatList();
+
+    UI.toast('Chat deleted', 'info');
+  }
+
+  function renderChatList() {
+    const list = document.getElementById('chat-list');
+    const empty = document.getElementById('chat-list-empty');
+    const chats = getAllChats();
+
+    // Remove old chat items (keep the empty div)
+    list.querySelectorAll('.chat-item').forEach(el => el.remove());
+
+    if (chats.length === 0) {
+      empty.style.display = '';
+      return;
+    }
+
+    empty.style.display = 'none';
+
+    chats.forEach(chat => {
+      const item = document.createElement('div');
+      item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
+      item.dataset.id = chat.id;
+
+      const date = new Date(chat.updatedAt);
+      const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      item.innerHTML = `
+        <div class="chat-item-info">
+          <div class="chat-item-title">${escapeHtml(chat.title)}</div>
+          <div class="chat-item-date">${dateStr}</div>
+        </div>
+        <button class="chat-item-delete" data-id="${chat.id}" title="Delete">✕</button>
+      `;
+
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('.chat-item-delete')) return;
+        loadChat(chat.id);
+        // Close sidebar on mobile
+        if (window.innerWidth < 600) {
+          document.getElementById('sidebar').classList.remove('open');
+          document.getElementById('sidebar-overlay').classList.remove('show');
+          document.body.style.overflow = '';
+        }
+      });
+
+      item.querySelector('.chat-item-delete').addEventListener('click', (e) => {
+        e.stopPropagation();
+        deleteChat(chat.id);
+      });
+
+      list.appendChild(item);
+    });
+  }
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  }
 
   // ── Init ────────────────────────────────────────────────────────────────
   async function init() {
@@ -36,6 +181,9 @@ const App = (() => {
         document.getElementById('send-btn').disabled = false;
       }
 
+      // Start a fresh chat and load history
+      startNewChat();
+      renderChatList();
       bindEvents();
     });
   }
@@ -50,6 +198,10 @@ const App = (() => {
     const clearBtn = document.getElementById('clear-btn');
     const exportBtn = document.getElementById('export-btn');
     const drawerClose = document.getElementById('drawer-close');
+    const newChatBtn = document.getElementById('new-chat-btn');
+
+    // New chat
+    newChatBtn.addEventListener('click', startNewChat);
 
     // API Key
     setKeyBtn.addEventListener('click', connectKey);
@@ -82,7 +234,6 @@ const App = (() => {
     input.addEventListener('input', async () => {
       UI.autoResize(input);
       document.getElementById('char-count').textContent = `${input.value.length} chars`;
-
       const encLive = document.getElementById('enc-live');
       if (input.value.length > 2) {
         try {
@@ -107,14 +258,10 @@ const App = (() => {
     sendBtn.addEventListener('click', () => { if (!isSending) sendMessage(); });
 
     clearBtn.addEventListener('click', () => {
-      conversationHistory = [];
-      document.getElementById('messages-list').innerHTML = '';
-      document.getElementById('welcome').style.display = '';
-      UI.toast('Session cleared', 'info');
+      startNewChat();
     });
 
     exportBtn.addEventListener('click', exportChat);
-
     drawerClose.addEventListener('click', () => {
       document.getElementById('app').classList.remove('drawer-open');
     });
@@ -136,31 +283,22 @@ const App = (() => {
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files[0];
       if (!file) return;
-
       if (file.size > 5 * 1024 * 1024) {
         UI.toast('File too large — max 5MB', 'error');
         fileInput.value = '';
         return;
       }
-
       UI.toast(`Reading ${file.name}...`, 'info');
-
       try {
         let content = '';
-        if (file.type === 'application/pdf') {
-          content = await extractPDF(file);
-        } else if (file.type.startsWith('image/')) {
-          content = await extractImage(file);
-        } else {
-          content = await extractText(file);
-        }
+        if (file.type === 'application/pdf') content = await extractPDF(file);
+        else if (file.type.startsWith('image/')) content = await extractImage(file);
+        else content = await extractText(file);
 
         attachedFile = file;
         attachedFileContent = content;
         attachedFileName = file.name;
         attachedFileType = file.type;
-
-        // Show preview bar
         filePreviewName.textContent = file.name;
         filePreview.style.display = 'flex';
         uploadBtn.classList.add('has-file');
@@ -168,7 +306,6 @@ const App = (() => {
       } catch (e) {
         UI.toast('Could not read file: ' + e.message, 'error');
       }
-
       fileInput.value = '';
     });
 
@@ -217,11 +354,10 @@ const App = (() => {
     document.getElementById('enc-live').textContent = '';
     document.getElementById('enc-live').classList.remove('active');
     document.getElementById('send-btn').classList.add('sending');
-
     UI.animatePipeline(4000);
     const t0 = Date.now();
 
-    // Encrypt user message
+    // Encrypt
     let encResult;
     try {
       encResult = await CryptoEngine.encrypt(rawText);
@@ -235,7 +371,6 @@ const App = (() => {
 
     const plaintextHash = await CryptoEngine.sha256(rawText);
 
-    // Render user message
     UI.renderMessage({
       role: 'user',
       text: fileInfo.hasFile ? `📎 ${fileInfo.name}\n\n${rawText}` : rawText,
@@ -250,11 +385,10 @@ const App = (() => {
       }
     });
 
-    // Build message with file context
     let messageContent = rawText;
     if (fileInfo.hasFile) {
       if (fileInfo.type?.startsWith('image/')) {
-        messageContent = `[Image attached: ${fileInfo.name}]\n\nUser says: ${rawText}`;
+        messageContent = `[Image: ${fileInfo.name}]\n\nUser says: ${rawText}`;
       } else {
         messageContent = `[File: ${fileInfo.name}]\n\nContents:\n\`\`\`\n${fileInfo.content.substring(0, 8000)}\n\`\`\`\n\nQuestion: ${rawText}`;
       }
@@ -264,18 +398,15 @@ const App = (() => {
     conversationHistory.push({ role: 'user', content: messageContent });
 
     const thinking = UI.renderThinking();
-
-    // Call API
     let aiText = '';
+
     try {
       const result = await callAPI(conversationHistory);
       const t1 = Date.now();
 
       if (result instanceof Response) {
-        // Streaming
         thinking.stop();
         UI.removeThinking();
-
         const streamDiv = UI.renderStreamingMessage();
         const reader = result.body.getReader();
         const decoder = new TextDecoder();
@@ -283,35 +414,26 @@ const App = (() => {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n').filter(l => l.startsWith('data: '));
-
           for (const line of lines) {
             const data = line.replace('data: ', '').trim();
             if (data === '[DONE]') break;
             try {
               const parsed = JSON.parse(data);
               const token = parsed.choices[0]?.delta?.content || '';
-              if (token) {
-                aiText += token;
-                UI.appendStreamToken(streamDiv, token);
-              }
+              if (token) { aiText += token; UI.appendStreamToken(streamDiv, token); }
               const totalTokens = parsed.x_groq?.usage?.completion_tokens;
               if (totalTokens) UI.bumpStat('tokens', totalTokens);
             } catch {}
           }
         }
-
-        const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
-        document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
+        document.getElementById('speed-badge').textContent = `⚡ ${((Date.now() - t1) / 1000).toFixed(1)}s`;
 
       } else {
-        // Non-streaming fallback
         aiText = result.choices[0]?.message?.content || 'No response.';
         UI.bumpStat('tokens', result.usage?.total_tokens || 1);
-        const elapsed = ((Date.now() - t1) / 1000).toFixed(1);
-        document.getElementById('speed-badge').textContent = `⚡ ${elapsed}s`;
+        document.getElementById('speed-badge').textContent = `⚡ ${((Date.now() - t1) / 1000).toFixed(1)}s`;
         thinking.stop();
         UI.removeThinking();
         UI.renderMessage({ role: 'ai', text: aiText, cipherHex: null, fullData: null });
@@ -330,7 +452,6 @@ const App = (() => {
       return;
     }
 
-    // Bump crypto stats
     try {
       await CryptoEngine.encrypt(aiText);
       UI.bumpStat('enc');
@@ -339,6 +460,10 @@ const App = (() => {
     } catch {}
 
     conversationHistory.push({ role: 'assistant', content: aiText });
+
+    // Auto-save chat to localStorage
+    saveCurrentChat();
+
     isSending = false;
     document.getElementById('send-btn').classList.remove('sending');
   }
@@ -351,10 +476,7 @@ const App = (() => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages, model: selectedModel }),
       });
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || `HTTP ${res.status}`); }
       return res.json();
     }
 
@@ -371,18 +493,11 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
         model: selectedModel,
         max_tokens: 1024,
         stream: true,
-        messages: [
-          { role: 'system', content: SYSTEM },
-          ...messages,
-        ],
+        messages: [{ role: 'system', content: SYSTEM }, ...messages],
       }),
     });
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-
+    if (!res.ok) { const err = await res.json(); throw new Error(err.error?.message || `HTTP ${res.status}`); }
     return res;
   }
 
@@ -425,24 +540,18 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
   function loadScript(src) {
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
-      s.src = src;
-      s.onload = resolve;
-      s.onerror = reject;
+      s.src = src; s.onload = resolve; s.onerror = reject;
       document.head.appendChild(s);
     });
   }
 
   // ── Export ────────────────────────────────────────────────────────────
   function exportChat() {
-    if (!conversationHistory.length) {
-      UI.toast('No messages to export yet', 'error');
-      return;
-    }
+    if (!conversationHistory.length) { UI.toast('No messages to export yet', 'error'); return; }
     const lines = [
       'CipherMind — Encrypted Chat Export',
       `Exported: ${new Date().toLocaleString()}`,
-      '─'.repeat(40),
-      '',
+      '─'.repeat(40), '',
       ...conversationHistory.map((m, i) =>
         `[${i + 1}] ${m.role === 'user' ? 'You' : 'CipherMind'}\n${m.content}\n`
       ),
@@ -460,7 +569,7 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
   return { init };
 })();
 
-// ── Global helper for suggestion chips ───────────────────────────────────
+// ── Global helpers ────────────────────────────────────────────────────────
 function fillInput(text) {
   const input = document.getElementById('user-input');
   input.value = text;
@@ -491,7 +600,6 @@ document.addEventListener('DOMContentLoaded', () => App.init());
 
   toggle.addEventListener('click', openSidebar);
   overlay.addEventListener('click', closeSidebar);
-
   document.getElementById('set-key-btn')?.addEventListener('click', () => {
     if (window.innerWidth < 600) closeSidebar();
   });

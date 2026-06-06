@@ -1171,3 +1171,95 @@
     .upload-btn { width: 42px; height: 42px; min-width: 42px; }
     .file-preview { font-size: 12px; padding: 6px 10px; }
   }
+
+  /* ── Chat History ── */
+.new-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+.new-chat-btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+.new-chat-btn:active { transform: scale(0.98); }
+
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.chat-list::-webkit-scrollbar { display: none; }
+
+.chat-list-empty {
+  font-size: 12px;
+  color: var(--text-4);
+  text-align: center;
+  padding: 12px 0;
+  font-style: italic;
+}
+
+.chat-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1.5px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+  min-width: 0;
+}
+.chat-item:hover { background: var(--bg2); border-color: var(--border); }
+.chat-item.active {
+  background: var(--accent-light);
+  border-color: #c7d2fe;
+}
+
+.chat-item-info {
+  flex: 1;
+  min-width: 0;
+}
+.chat-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.chat-item.active .chat-item-title { color: var(--accent); }
+.chat-item-date {
+  font-size: 10px;
+  color: var(--text-4);
+  margin-top: 1px;
+}
+
+.chat-item-delete {
+  background: none;
+  border: none;
+  color: var(--text-4);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.15s;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.chat-item:hover .chat-item-delete { opacity: 1; }
+.chat-item-delete:hover { color: var(--red); background: var(--red-light); }
