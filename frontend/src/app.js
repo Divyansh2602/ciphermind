@@ -318,3 +318,30 @@ function fillInput(text) {
 }
 
 document.addEventListener('DOMContentLoaded', () => App.init());
+
+// ── Mobile Sidebar Toggle ─────────────────────────────────────────────────
+(function() {
+  const toggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (!toggle || !sidebar || !overlay) return;
+
+  function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+
+  toggle.addEventListener('click', openSidebar);
+  overlay.addEventListener('click', closeSidebar);
+
+  // Close sidebar when connect button tapped on mobile
+  document.getElementById('set-key-btn')?.addEventListener('click', () => {
+    if (window.innerWidth < 600) closeSidebar();
+  });
+})();
