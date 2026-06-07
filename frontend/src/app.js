@@ -1,6 +1,6 @@
 /**
  * CipherMind — Frontend App
- * Features: Streaming, File Upload, Chat History, Multiple Chats, Mobile Sidebar
+ * Features: Streaming, File Upload, Vision AI, Chat History, Image Generation, Mobile Sidebar
  */
 
 const App = (() => {
@@ -18,9 +18,8 @@ const App = (() => {
   }
 
   function getAllChats() {
-    try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-    } catch { return []; }
+    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+    catch { return []; }
   }
 
   function saveAllChats(chats) {
@@ -31,10 +30,11 @@ const App = (() => {
     if (!currentChatId || !conversationHistory.length) return;
     const chats = getAllChats();
     const idx = chats.findIndex(c => c.id === currentChatId);
-    const title = conversationHistory[0]?.content?.substring(0, 36) || 'New Chat';
+    const rawTitle = conversationHistory[0]?.content || 'New Chat';
+    const title = rawTitle.substring(0, 36) + (rawTitle.length > 36 ? '...' : '');
     const chatData = {
       id: currentChatId,
-      title: title.length > 35 ? title.substring(0, 35) + '...' : title,
+      title,
       updatedAt: new Date().toISOString(),
       messages: conversationHistory
     };
@@ -58,14 +58,10 @@ const App = (() => {
     const chats = getAllChats();
     const chat = chats.find(c => c.id === id);
     if (!chat) return;
-
     currentChatId = id;
     conversationHistory = chat.messages || [];
-
-    // Clear and re-render messages
     document.getElementById('messages-list').innerHTML = '';
     document.getElementById('welcome').style.display = 'none';
-
     conversationHistory.forEach(msg => {
       UI.renderMessage({
         role: msg.role === 'user' ? 'user' : 'ai',
@@ -74,11 +70,8 @@ const App = (() => {
         fullData: null
       });
     });
-
     renderChatList();
     UI.toast(`Loaded: ${chat.title}`, 'info');
-
-    // Scroll to bottom
     setTimeout(() => {
       const area = document.getElementById('messages-area');
       area.scrollTop = area.scrollHeight;
@@ -88,11 +81,8 @@ const App = (() => {
   function deleteChat(id) {
     const chats = getAllChats().filter(c => c.id !== id);
     saveAllChats(chats);
-
-    // If deleting current chat, start a new one
     if (id === currentChatId) startNewChat();
     else renderChatList();
-
     UI.toast('Chat deleted', 'info');
   }
 
@@ -100,58 +90,175 @@ const App = (() => {
     const list = document.getElementById('chat-list');
     const empty = document.getElementById('chat-list-empty');
     const chats = getAllChats();
-
-    // Remove old chat items (keep the empty div)
     list.querySelectorAll('.chat-item').forEach(el => el.remove());
-
-    if (chats.length === 0) {
-      empty.style.display = '';
-      return;
-    }
-
+    if (chats.length === 0) { empty.style.display = ''; return; }
     empty.style.display = 'none';
-
     chats.forEach(chat => {
       const item = document.createElement('div');
       item.className = `chat-item ${chat.id === currentChatId ? 'active' : ''}`;
-      item.dataset.id = chat.id;
-
       const date = new Date(chat.updatedAt);
       const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
       item.innerHTML = `
         <div class="chat-item-info">
-          <div class="chat-item-title">${escapeHtml(chat.title)}</div>
+          <div class="chat-item-title">${escapeHtmlLocal(chat.title)}</div>
           <div class="chat-item-date">${dateStr}</div>
         </div>
         <button class="chat-item-delete" data-id="${chat.id}" title="Delete">✕</button>
       `;
-
       item.addEventListener('click', (e) => {
         if (e.target.closest('.chat-item-delete')) return;
         loadChat(chat.id);
-        // Close sidebar on mobile
         if (window.innerWidth < 600) {
           document.getElementById('sidebar').classList.remove('open');
           document.getElementById('sidebar-overlay').classList.remove('show');
           document.body.style.overflow = '';
         }
       });
-
       item.querySelector('.chat-item-delete').addEventListener('click', (e) => {
         e.stopPropagation();
         deleteChat(chat.id);
       });
-
       list.appendChild(item);
     });
   }
 
-  function escapeHtml(s) {
-    return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+  // ── Image Generation ──────────────────────────────────────────────────
+  const IMAGE_KEYWORDS = [
+    'draw ', 'draw a ', 'draw an ',
+    'generate image', 'generate a image', 'generate an image',
+    'create image', 'create a image', 'create an image',
+    'make image', 'make a image', 'make an image',
+    'generate picture', 'generate a picture', 'generate the picture',
+    'create picture', 'create a picture',
+    'make picture', 'make a picture',
+    'generate art', 'create art', 'make art',
+    'paint a', 'paint an', 'paint the',
+    'illustrate', 'sketch a', 'sketch an',
+    'show me a picture', 'show me an image',
+    'image of', 'picture of', 'photo of',
+    'generate a photo', 'create a photo'
+  ];
+
+  function isImageRequest(text) {
+    const lower = text.toLowerCase().trim();
+    return IMAGE_KEYWORDS.some(kw => lower.startsWith(kw) || lower.includes(kw));
+  }
+
+  function extractImagePrompt(text) {
+    const lower = text.toLowerCase().trim();
+    const triggers = [
+      'draw a ', 'draw an ', 'draw ',
+      'generate an image of ', 'generate a image of ', 'generate image of ',
+      'generate an image ', 'generate a image ', 'generate image ',
+      'create an image of ', 'create a image of ', 'create image of ',
+      'create an image ', 'create a image ', 'create image ',
+      'make an image of ', 'make a image of ', 'make image of ',
+      'make an image ', 'make a image ', 'make image ',
+      'generate a picture of ', 'generate a picture ',
+      'create a picture of ', 'create a picture ',
+      'make a picture of ', 'make a picture ',
+      'generate art of ', 'create art of ', 'make art of ',
+      'paint a ', 'paint an ', 'paint ',
+      'illustrate ', 'sketch a ', 'sketch an ', 'sketch ',
+      'show me a picture of ', 'show me an image of ',
+      'generate a photo of ', 'create a photo of ',
+      'photo of ', 'image of ', 'picture of '
+    ];
+    for (const trigger of triggers) {
+      if (lower.startsWith(trigger)) {
+        return text.substring(trigger.length).trim();
+      }
+    }
+    return text;
+  }
+
+  async function generateAndShowImage(prompt, containerDiv) {
+    const loadingEl = document.createElement('div');
+    loadingEl.className = 'img-loading';
+    loadingEl.innerHTML = `<div class="img-loading-spinner"></div><span>Generating image...</span>`;
+    containerDiv.appendChild(loadingEl);
+    document.getElementById('messages-area').scrollTop =
+      document.getElementById('messages-area').scrollHeight;
+
+    try {
+      const encodedPrompt = encodeURIComponent(prompt + ', high quality, detailed');
+      const seed = Math.floor(Math.random() * 99999);
+      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&seed=${seed}&nologo=true`;
+
+      await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = imageUrl;
+        setTimeout(reject, 30000);
+      });
+
+      loadingEl.remove();
+      const wrap = document.createElement('div');
+      wrap.className = 'msg-image-wrap';
+      wrap.innerHTML = `
+        <div class="msg-image-label">🎨 Generated image</div>
+        <img src="${imageUrl}" alt="${escapeHtmlLocal(prompt)}" onclick="window.open('${imageUrl}', '_blank')" />
+        <a class="img-download-btn" href="${imageUrl}" download="ciphermind-image.jpg" target="_blank">↓ Download</a>
+      `;
+      containerDiv.appendChild(wrap);
+      document.getElementById('messages-area').scrollTop =
+        document.getElementById('messages-area').scrollHeight;
+    } catch (e) {
+      loadingEl.remove();
+      const errEl = document.createElement('div');
+      errEl.style.cssText = 'font-size:13px;color:var(--red);margin-top:8px;';
+      errEl.textContent = '⚠️ Image generation failed. Try again.';
+      containerDiv.appendChild(errEl);
+    }
+  }
+
+  // ── Vision Message Builders ───────────────────────────────────────────
+  function buildVisionMessages(userText, base64, mimeType) {
+    return [
+      {
+        role: 'system',
+        content: `You are CipherMind, a smart AI assistant with vision capabilities inside an encrypted chat app.
+Analyze images thoroughly — describe text, tables, charts, diagrams, people, objects, colors, and any visual content you see.
+Be detailed and helpful.`
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: `data:${mimeType};base64,${base64}` }
+          },
+          {
+            type: 'text',
+            text: userText || 'Please analyze this image in detail. Describe everything you see including any text, tables, charts, and visual elements.'
+          }
+        ]
+      }
+    ];
+  }
+
+  function buildPdfVisionMessages(userText, pageImages) {
+    const content = [];
+    pageImages.forEach((base64, idx) => {
+      content.push({ type: 'text', text: `Page ${idx + 1}:` });
+      content.push({
+        type: 'image_url',
+        image_url: { url: `data:image/jpeg;base64,${base64}` }
+      });
+    });
+    content.push({
+      type: 'text',
+      text: userText || 'Please analyze this PDF. Extract all text, describe tables with data, explain charts and diagrams.'
+    });
+    return [
+      {
+        role: 'system',
+        content: `You are CipherMind, a smart AI assistant with vision capabilities.
+Analyze PDF pages thoroughly — extract all text, describe tables, explain charts and diagrams. Be comprehensive and accurate.`
+      },
+      { role: 'user', content }
+    ];
   }
 
   // ── Init ────────────────────────────────────────────────────────────────
@@ -160,7 +267,6 @@ const App = (() => {
       const app = document.getElementById('app');
       app.classList.remove('hidden');
 
-      // Init crypto
       try {
         const keyInfo = await CryptoEngine.init();
         document.getElementById('session-key-display').textContent = keyInfo.keyFingerprint;
@@ -169,7 +275,6 @@ const App = (() => {
         UI.toast('Crypto init failed: ' + e.message, 'error');
       }
 
-      // If backend URL configured, skip API key input
       if (CONFIG.BACKEND_URL) {
         apiKey = '__backend__';
         document.getElementById('set-key-btn').textContent = '✓ Via backend';
@@ -181,7 +286,6 @@ const App = (() => {
         document.getElementById('send-btn').disabled = false;
       }
 
-      // Start a fresh chat and load history
       startNewChat();
       renderChatList();
       bindEvents();
@@ -200,10 +304,8 @@ const App = (() => {
     const drawerClose = document.getElementById('drawer-close');
     const newChatBtn = document.getElementById('new-chat-btn');
 
-    // New chat
     newChatBtn.addEventListener('click', startNewChat);
 
-    // API Key
     setKeyBtn.addEventListener('click', connectKey);
     apiInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connectKey(); });
 
@@ -224,13 +326,11 @@ const App = (() => {
       UI.toast('Connected to Groq! Start chatting 🎉', 'success');
     }
 
-    // Model
     modelSelect.addEventListener('change', () => {
       selectedModel = modelSelect.value;
       UI.toast(`Model: ${modelSelect.options[modelSelect.selectedIndex].text.split('—')[0].trim()}`, 'info');
     });
 
-    // Input typing
     input.addEventListener('input', async () => {
       UI.autoResize(input);
       document.getElementById('char-count').textContent = `${input.value.length} chars`;
@@ -257,10 +357,7 @@ const App = (() => {
 
     sendBtn.addEventListener('click', () => { if (!isSending) sendMessage(); });
 
-    clearBtn.addEventListener('click', () => {
-      startNewChat();
-    });
-
+    clearBtn.addEventListener('click', startNewChat);
     exportBtn.addEventListener('click', exportChat);
     drawerClose.addEventListener('click', () => {
       document.getElementById('app').classList.remove('drawer-open');
@@ -277,32 +374,48 @@ const App = (() => {
     let attachedFileContent = '';
     let attachedFileName = '';
     let attachedFileType = '';
+    let attachedBase64 = null;
+    let attachedPdfImages = null;
 
     uploadBtn.addEventListener('click', () => fileInput.click());
 
     fileInput.addEventListener('change', async () => {
       const file = fileInput.files[0];
       if (!file) return;
-      if (file.size > 5 * 1024 * 1024) {
-        UI.toast('File too large — max 5MB', 'error');
+      if (file.size > 10 * 1024 * 1024) {
+        UI.toast('File too large — max 10MB', 'error');
         fileInput.value = '';
         return;
       }
       UI.toast(`Reading ${file.name}...`, 'info');
       try {
         let content = '';
-        if (file.type === 'application/pdf') content = await extractPDF(file);
-        else if (file.type.startsWith('image/')) content = await extractImage(file);
-        else content = await extractText(file);
+        let base64 = null;
+        let pdfImages = null;
+
+        if (file.type === 'application/pdf') {
+          UI.toast('Converting PDF pages for vision analysis...', 'info');
+          const result = await extractPDFAsImages(file);
+          pdfImages = result.images;
+          content = result.text;
+        } else if (file.type.startsWith('image/')) {
+          base64 = await extractImageBase64(file);
+          content = '[Image file]';
+        } else {
+          content = await extractText(file);
+        }
 
         attachedFile = file;
         attachedFileContent = content;
         attachedFileName = file.name;
         attachedFileType = file.type;
+        attachedBase64 = base64;
+        attachedPdfImages = pdfImages;
+
         filePreviewName.textContent = file.name;
         filePreview.style.display = 'flex';
         uploadBtn.classList.add('has-file');
-        UI.toast(`✅ ${file.name} attached`, 'success');
+        UI.toast(`✅ ${file.name} ready for analysis`, 'success');
       } catch (e) {
         UI.toast('Could not read file: ' + e.message, 'error');
       }
@@ -316,6 +429,8 @@ const App = (() => {
       attachedFileContent = '';
       attachedFileName = '';
       attachedFileType = '';
+      attachedBase64 = null;
+      attachedPdfImages = null;
       filePreview.style.display = 'none';
       filePreviewName.textContent = '';
       uploadBtn.classList.remove('has-file');
@@ -326,7 +441,9 @@ const App = (() => {
       content: attachedFileContent,
       name: attachedFileName,
       hasFile: !!attachedFile,
-      type: attachedFileType
+      type: attachedFileType,
+      base64: attachedBase64,
+      pdfImages: attachedPdfImages
     });
   }
 
@@ -355,9 +472,58 @@ const App = (() => {
     document.getElementById('enc-live').classList.remove('active');
     document.getElementById('send-btn').classList.add('sending');
     UI.animatePipeline(4000);
+
+    // ── Image generation check FIRST ─────────────────────────────────
+    if (!fileInfo.hasFile && isImageRequest(rawText)) {
+      const imagePrompt = extractImagePrompt(rawText);
+      UI.toast('🎨 Generating image...', 'info');
+
+      // Encrypt for display
+      let encResult;
+      try {
+        encResult = await CryptoEngine.encrypt(rawText);
+        UI.bumpStat('enc');
+      } catch {}
+
+      UI.renderMessage({
+        role: 'user',
+        text: rawText,
+        cipherHex: encResult?.cipherHex || null,
+        fullData: null
+      });
+
+      // AI message container
+      const imgMsgDiv = document.createElement('div');
+      imgMsgDiv.className = 'message ai';
+      imgMsgDiv.innerHTML = `
+        <div class="msg-avatar">🤖</div>
+        <div class="msg-body">
+          <div class="msg-meta">
+            <span class="msg-name">CipherMind</span>
+            <span class="msg-time">${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
+          </div>
+          <div class="msg-bubble" id="img-bubble-content">
+            <span style="font-size:13px;color:var(--text-3);">Here's your image for: <em>${escapeHtmlLocal(imagePrompt)}</em></span>
+          </div>
+        </div>
+      `;
+      document.getElementById('messages-list').appendChild(imgMsgDiv);
+      document.getElementById('welcome').style.display = 'none';
+
+      await generateAndShowImage(imagePrompt, imgMsgDiv.querySelector('#img-bubble-content'));
+
+      conversationHistory.push({ role: 'user', content: rawText });
+      conversationHistory.push({ role: 'assistant', content: `Generated image for: "${imagePrompt}"` });
+      saveCurrentChat();
+
+      isSending = false;
+      document.getElementById('send-btn').classList.remove('sending');
+      return;
+    }
+
     const t0 = Date.now();
 
-    // Encrypt
+    // Encrypt user message
     let encResult;
     try {
       encResult = await CryptoEngine.encrypt(rawText);
@@ -385,26 +551,34 @@ const App = (() => {
       }
     });
 
+    // Build message content
     let messageContent = rawText;
+    let visionMessages = null;
+
     if (fileInfo.hasFile) {
-      if (fileInfo.type?.startsWith('image/')) {
-        messageContent = `[Image: ${fileInfo.name}]\n\nUser says: ${rawText}`;
+      if (fileInfo.type?.startsWith('image/') && fileInfo.base64) {
+        visionMessages = buildVisionMessages(rawText, fileInfo.base64, fileInfo.type);
+      } else if (fileInfo.type === 'application/pdf' && fileInfo.pdfImages?.length > 0) {
+        visionMessages = buildPdfVisionMessages(rawText, fileInfo.pdfImages);
       } else {
         messageContent = `[File: ${fileInfo.name}]\n\nContents:\n\`\`\`\n${fileInfo.content.substring(0, 8000)}\n\`\`\`\n\nQuestion: ${rawText}`;
       }
       window._clearFile?.();
     }
 
-    conversationHistory.push({ role: 'user', content: messageContent });
+    if (!visionMessages) {
+      conversationHistory.push({ role: 'user', content: messageContent });
+    }
 
     const thinking = UI.renderThinking();
     let aiText = '';
 
     try {
-      const result = await callAPI(conversationHistory);
+      const result = await callAPI(conversationHistory, { vision: !!visionMessages, visionMessages });
       const t1 = Date.now();
 
       if (result instanceof Response) {
+        // Streaming
         thinking.stop();
         UI.removeThinking();
         const streamDiv = UI.renderStreamingMessage();
@@ -431,6 +605,7 @@ const App = (() => {
         document.getElementById('speed-badge').textContent = `⚡ ${((Date.now() - t1) / 1000).toFixed(1)}s`;
 
       } else {
+        // Non-streaming (vision)
         aiText = result.choices[0]?.message?.content || 'No response.';
         UI.bumpStat('tokens', result.usage?.total_tokens || 1);
         document.getElementById('speed-badge').textContent = `⚡ ${((Date.now() - t1) / 1000).toFixed(1)}s`;
@@ -459,9 +634,10 @@ const App = (() => {
       UI.bumpStat('hmac');
     } catch {}
 
+    if (visionMessages) {
+      conversationHistory.push({ role: 'user', content: rawText + ' [file attached]' });
+    }
     conversationHistory.push({ role: 'assistant', content: aiText });
-
-    // Auto-save chat to localStorage
     saveCurrentChat();
 
     isSending = false;
@@ -469,19 +645,34 @@ const App = (() => {
   }
 
   // ── API Call ──────────────────────────────────────────────────────────
-  async function callAPI(messages) {
+  async function callAPI(messages, options = {}) {
+    const { vision = false, visionMessages = null } = options;
+
     if (CONFIG.BACKEND_URL) {
       const res = await fetch(`${CONFIG.BACKEND_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model: selectedModel }),
+        body: JSON.stringify({
+          messages: visionMessages || messages,
+          model: vision ? 'meta-llama/llama-4-scout-17b-16e-instruct' : selectedModel,
+          vision
+        }),
       });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || `HTTP ${res.status}`); }
       return res.json();
     }
 
     const SYSTEM = `You are CipherMind, a smart and friendly AI assistant inside an encrypted chat app.
-Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.`;
+Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.
+When analyzing files or images, be thorough — describe text, tables, charts, diagrams, and visual elements.`;
+
+    const model = vision ? 'meta-llama/llama-4-scout-17b-16e-instruct' : selectedModel;
+    const useStream = !vision;
+
+    const messagesToSend = visionMessages || [
+      { role: 'system', content: SYSTEM },
+      ...messages
+    ];
 
     const res = await fetch(CONFIG.GROQ_DIRECT_URL, {
       method: 'POST',
@@ -490,15 +681,19 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: selectedModel,
-        max_tokens: 1024,
-        stream: true,
-        messages: [{ role: 'system', content: SYSTEM }, ...messages],
+        model,
+        max_tokens: 2048,
+        stream: useStream,
+        messages: messagesToSend,
       }),
     });
 
-    if (!res.ok) { const err = await res.json(); throw new Error(err.error?.message || `HTTP ${res.status}`); }
-    return res;
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    return useStream ? res : res.json();
   }
 
   // ── File Extractors ───────────────────────────────────────────────────
@@ -511,16 +706,16 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
     });
   }
 
-  function extractImage(file) {
+  function extractImageBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
+      reader.onload = e => resolve(e.target.result.split(',')[1]);
       reader.onerror = () => reject(new Error('Failed to read image'));
       reader.readAsDataURL(file);
     });
   }
 
-  async function extractPDF(file) {
+  async function extractPDFAsImages(file) {
     if (!window.pdfjsLib) {
       await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js');
       window.pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -528,13 +723,21 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
     }
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let text = '';
-    for (let i = 1; i <= Math.min(pdf.numPages, 20); i++) {
+    const images = [];
+    let textFallback = '';
+    const pagesToProcess = Math.min(pdf.numPages, 5);
+    for (let i = 1; i <= pagesToProcess; i++) {
       const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      text += content.items.map(item => item.str).join(' ') + '\n';
+      const viewport = page.getViewport({ scale: 1.5 });
+      const canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+      images.push(canvas.toDataURL('image/jpeg', 0.85).split(',')[1]);
+      const textContent = await page.getTextContent();
+      textFallback += textContent.items.map(item => item.str).join(' ') + '\n';
     }
-    return text.trim() || 'Could not extract text from this PDF.';
+    return { images, text: textFallback.trim() };
   }
 
   function loadScript(src) {
@@ -564,6 +767,15 @@ Be warm, conversational, and genuinely helpful. Format code clearly. Keep answer
     a.click();
     URL.revokeObjectURL(url);
     UI.toast('Chat exported!', 'success');
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────
+  function escapeHtmlLocal(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   return { init };
@@ -603,4 +815,4 @@ document.addEventListener('DOMContentLoaded', () => App.init());
   document.getElementById('set-key-btn')?.addEventListener('click', () => {
     if (window.innerWidth < 600) closeSidebar();
   });
-})();
+})(); 
