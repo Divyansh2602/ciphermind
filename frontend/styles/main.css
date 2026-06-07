@@ -1335,3 +1335,120 @@
 @media (max-width: 599px) {
   .msg-image-wrap img { width: 100%; }
 }
+
+/* ── Dark Mode ── */
+.theme-toggle {
+  width: 36px; height: 36px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.theme-toggle:hover { border-color: var(--accent); background: var(--accent-light); }
+
+body.dark {
+  --bg: #0f0f13;
+  --bg2: #161620;
+  --surface: #1a1a26;
+  --surface2: #20202e;
+  --surface3: #26263a;
+  --border: #2e2e45;
+  --border2: #3a3a55;
+  --text: #e8e8f5;
+  --text-2: #b8b8d0;
+  --text-3: #8080a8;
+  --text-4: #505075;
+  --accent-light: #1e1e35;
+  --accent2-light: #0f2020;
+  --green-light: #0f2018;
+  --red-light: #1f1015;
+  --yellow-light: #1f1a08;
+}
+
+body.dark .orb-1 { opacity: 0.15; }
+body.dark .orb-2 { opacity: 0.12; }
+body.dark .orb-3 { opacity: 0.08; }
+
+body.dark .msg-bubble {
+  background: var(--surface2);
+  border-color: var(--border);
+}
+body.dark .message.user .msg-bubble {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+body.dark .boot-card {
+  background: var(--surface);
+  border-color: var(--border);
+}
+body.dark textarea#user-input {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+body.dark textarea#user-input:focus {
+  background: var(--surface3);
+}
+body.dark .key-input {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+body.dark .model-select {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text);
+}
+body.dark .chip {
+  background: var(--surface2);
+  border-color: var(--border);
+  color: var(--text-2);
+}
+body.dark .chip:hover {
+  background: var(--accent-light);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+body.dark .msg-cipher-preview {
+  background: var(--surface3);
+  border-color: var(--border2);
+}
+body.dark .session-key-card {
+  background: var(--surface2);
+  border-color: var(--border2);
+}
+body.dark .stat-card {
+  background: var(--surface2);
+  border-color: var(--border);
+}
+body.dark .pipe-step.active {
+  background: var(--surface3);
+}
+body.dark .drawer-field-val {
+  background: var(--surface2);
+  border-color: var(--border);
+}
+body.dark .chat-item:hover {
+  background: var(--surface2);
+}
+body.dark .chat-item.active {
+  background: var(--surface3);
+  border-color: var(--border2);
+}
+body.dark .new-chat-btn {
+  background: var(--accent);
+}
+body.dark .toast {
+  background: var(--surface2);
+  border-color: var(--border2);
+}
+body.dark .boot-bar-wrap {
+  background: var(--surface3);
+}

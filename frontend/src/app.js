@@ -824,3 +824,22 @@ document.addEventListener('DOMContentLoaded', () => App.init());
     if (window.innerWidth < 600) closeSidebar();
   });
 })(); 
+
+// ── Dark Mode Toggle ──────────────────────────────────────────────────────
+(function () {
+  const btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+
+  // Load saved preference
+  const saved = localStorage.getItem('ciphermind_theme');
+  if (saved === 'dark') {
+    document.body.classList.add('dark');
+    btn.textContent = '☀️';
+  }
+
+  btn.addEventListener('click', () => {
+    const isDark = document.body.classList.toggle('dark');
+    btn.textContent = isDark ? '☀️' : '🌙';
+    localStorage.setItem('ciphermind_theme', isDark ? 'dark' : 'light');
+  });
+})();
