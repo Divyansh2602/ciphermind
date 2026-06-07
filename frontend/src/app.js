@@ -658,10 +658,18 @@ Analyze PDF pages thoroughly — extract all text, describe tables, explain char
           vision
         }),
       });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error || `HTTP ${res.status}`); }
-      return res.json();
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      // Vision returns JSON, text returns stream
+      if (vision) {
+        return res.json();
+      }
+      return res; // Return raw Response for streaming
     }
 
+    // Direct Groq mode
     const SYSTEM = `You are CipherMind, a smart and friendly AI assistant inside an encrypted chat app.
 Be warm, conversational, and genuinely helpful. Format code clearly. Keep answers focused.
 When analyzing files or images, be thorough — describe text, tables, charts, diagrams, and visual elements.`;
