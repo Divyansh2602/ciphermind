@@ -1,6 +1,7 @@
 /**
- * CipherMind — UI Engine (Human Edition)
- * Warm animations, friendly boot, human-feeling interactions
+ * CipherMind — UI Engine
+ * Handles: Boot sequence, pipeline animator, message rendering,
+ *          streaming, crypto inspector, TTS, stat bumping
  */
 
 const UI = (() => {
@@ -52,13 +53,11 @@ const UI = (() => {
     const steps = 8;
     const allSteps = document.querySelectorAll('.pipe-step');
     allSteps.forEach(s => s.classList.remove('active', 'done'));
-
     if (pipeTimer) clearTimeout(pipeTimer);
 
     const stepDuration = durationMs / steps;
     for (let i = 1; i <= steps; i++) {
       setTimeout(() => {
-        // Mark previous as done
         for (let j = 1; j < i; j++) {
           const el = document.getElementById(`ps-${j}`);
           if (el) { el.classList.remove('active'); el.classList.add('done'); }
@@ -132,6 +131,7 @@ const UI = (() => {
           ${cipherHex ? `<span class="msg-enc-tag">🔐 encrypted</span>` : ''}
         </div>
         <div class="msg-bubble">${escapedText}</div>
+        ${!isUser ? `<button class="tts-btn" title="Read aloud">🔊</button>` : ''}
         ${cipherHex ? `<div class="msg-cipher-preview" title="Click to expand">${cipherHex}</div>` : ''}
       </div>
     `;
@@ -140,6 +140,15 @@ const UI = (() => {
     div.querySelector('.msg-bubble').addEventListener('click', () => {
       openInspector(fullData);
     });
+
+    // TTS button
+    const ttsBtn = div.querySelector('.tts-btn');
+    if (ttsBtn) {
+      ttsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        speakText(text, ttsBtn);
+      });
+    }
 
     // Toggle cipher preview expand
     const cp = div.querySelector('.msg-cipher-preview');
@@ -198,6 +207,147 @@ const UI = (() => {
     if (el) el.remove();
   }
 
+  // ── Streaming ──────────────────────────────────────────────────────────
+  function renderStreamingMessage() {
+    const list = document.getElementById('messages-list');
+    const welcome = document.getElementById('welcome');
+    if (welcome) welcome.style.display = 'none';
+
+    const div = document.createElement('div');
+    div.className = 'message ai';
+    div.id = 'streaming-msg';
+    div.innerHTML = `
+      <div class="msg-avatar">🤖</div>
+      <div class="msg-body">
+        <div class="msg-meta">
+          <span class="msg-name">CipherMind</span>
+          <span class="msg-time">${formatTime()}</span>
+        </div>
+        <div class="msg-bubble streaming-bubble" id="streaming-bubble"></div>
+        <button class="tts-btn" id="streaming-tts-btn" title="Read aloud" style="display:none">🔊</button>
+      </div>
+    `;
+    list.appendChild(div);
+    list.parentElement.scrollTop = list.parentElement.scrollHeight;
+    return div;
+  }
+
+  function appendStreamToken(div, token) {
+    const bubble = div.querySelector('.streaming-bubble');
+    if (!bubble) return;
+    // Use innerText to accumulate, then set innerHTML with escape
+    bubble._rawText = (bubble._rawText || '') + token;
+    bubble.innerHTML = escapeHtml(bubble._rawText);
+    const area = document.getElementById('messages-area');
+    if (area) area.scrollTop = area.scrollHeight;
+  }
+
+  function finalizeStreamingMessage(div, fullText) {
+    if (!div) return;
+    div.removeAttribute('id');
+
+    const bubble = div.querySelector('.streaming-bubble');
+    if (bubble) {
+      bubble.classList.remove('streaming-bubble');
+      bubble._rawText = null;
+    }
+
+    // Show TTS button
+    const ttsBtn = div.querySelector('#streaming-tts-btn');
+    if (ttsBtn) {
+      ttsBtn.style.display = 'inline-flex';
+      ttsBtn.removeAttribute('id');
+      ttsBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        speakText(fullText, ttsBtn);
+      });
+    }
+  }
+
+  // ── Text to Speech ─────────────────────────────────────────────────────
+  let currentTtsBtn = null;
+
+  function speakText(text, btn) {
+    if (!window.speechSynthesis) {
+      toast('Text to speech not supported in this browser', 'error');
+      return;
+    }
+
+    // If already speaking, stop
+    if (window.speechSynthesis.speaking) {
+      window.speechSynthesis.cancel();
+      document.querySelectorAll('.tts-btn').forEach(b => {
+        b.textContent = '🔊';
+        b.classList.remove('speaking');
+        b.dataset.speaking = 'false';
+      });
+      // If same button — just stop
+      if (currentTtsBtn === btn) {
+        currentTtsBtn = null;
+        return;
+      }
+    }
+
+    // Clean markdown from text for better speech
+    const cleanText = text
+      .replace(/```[\s\S]*?```/g, 'code block omitted.')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\*\*([^*]+)\*\*/g, '$1')
+      .replace(/\*([^*]+)\*/g, '$1')
+      .replace(/#{1,6}\s/g, '')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      .replace(/\n+/g, '. ')
+      .replace(/\.{2,}/g, '.')
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+
+    // Pick best available English voice
+    const loadVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v =>
+        v.name.includes('Google US English') ||
+        v.name.includes('Samantha') ||
+        v.name.includes('Daniel') ||
+        v.name.includes('Karen') ||
+        (v.lang.startsWith('en') && v.localService)
+      ) || voices.find(v => v.lang.startsWith('en'));
+      if (preferred) utterance.voice = preferred;
+    };
+
+    if (window.speechSynthesis.getVoices().length > 0) {
+      loadVoice();
+    } else {
+      window.speechSynthesis.addEventListener('voiceschanged', loadVoice, { once: true });
+    }
+
+    utterance.onstart = () => {
+      btn.textContent = '⏹️';
+      btn.classList.add('speaking');
+      btn.dataset.speaking = 'true';
+      currentTtsBtn = btn;
+    };
+
+    utterance.onend = () => {
+      btn.textContent = '🔊';
+      btn.classList.remove('speaking');
+      btn.dataset.speaking = 'false';
+      currentTtsBtn = null;
+    };
+
+    utterance.onerror = () => {
+      btn.textContent = '🔊';
+      btn.classList.remove('speaking');
+      btn.dataset.speaking = 'false';
+      currentTtsBtn = null;
+    };
+
+    window.speechSynthesis.speak(utterance);
+  }
+
   // ── Inspector ──────────────────────────────────────────────────────────
   function openInspector(data) {
     if (!data) return;
@@ -214,7 +364,7 @@ const UI = (() => {
         <div class="drawer-field-val blue">AES-256-GCM</div>
       </div>
       <div class="drawer-field">
-        <div class="drawer-field-label">MAC</div>
+        <div class="drawer-field-label">MAC Algorithm</div>
         <div class="drawer-field-val blue">HMAC-SHA-512</div>
       </div>
       <div class="drawer-field">
@@ -246,43 +396,13 @@ const UI = (() => {
 
   // ── Helpers ────────────────────────────────────────────────────────────
   function escapeHtml(s) {
-    return s
+    return String(s)
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/\n/g, '<br>');
   }
 
-  function renderStreamingMessage() {
-    const list = document.getElementById('messages-list');
-    const welcome = document.getElementById('welcome');
-    if (welcome) welcome.style.display = 'none';
-
-    const div = document.createElement('div');
-    div.className = 'message ai';
-    div.innerHTML = `
-      <div class="msg-avatar">🤖</div>
-      <div class="msg-body">
-        <div class="msg-meta">
-          <span class="msg-name">CipherMind</span>
-          <span class="msg-time">${formatTime()}</span>
-        </div>
-        <div class="msg-bubble streaming-bubble" id="streaming-bubble"></div>
-      </div>
-    `;
-    list.appendChild(div);
-    list.parentElement.scrollTop = list.parentElement.scrollHeight;
-    return div;
-  }
-
-  function appendStreamToken(div, token) {
-    const bubble = div.querySelector('.streaming-bubble');
-    if (!bubble) return;
-    bubble.innerHTML = escapeHtml(bubble.innerText + token);
-    bubble.parentElement.parentElement.parentElement.scrollTop =
-      bubble.parentElement.parentElement.parentElement.scrollHeight;
-  }
-  
   return {
     runBootSequence,
     animatePipeline,
@@ -295,6 +415,8 @@ const UI = (() => {
     openInspector,
     renderStreamingMessage,
     appendStreamToken,
+    finalizeStreamingMessage,
+    speakText,
   };
 })();
 
