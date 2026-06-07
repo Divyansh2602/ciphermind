@@ -175,40 +175,62 @@ const App = (() => {
   async function generateAndShowImage(prompt, containerDiv) {
     const loadingEl = document.createElement('div');
     loadingEl.className = 'img-loading';
-    loadingEl.innerHTML = `<div class="img-loading-spinner"></div><span>Generating image...</span>`;
+    loadingEl.innerHTML = `<div class="img-loading-spinner"></div><span>Generating image... (10-20 seconds)</span>`;
     containerDiv.appendChild(loadingEl);
     document.getElementById('messages-area').scrollTop =
       document.getElementById('messages-area').scrollHeight;
 
     try {
-      const encodedPrompt = encodeURIComponent(prompt + ', high quality, detailed');
-      const seed = Math.floor(Math.random() * 99999);
-      const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&seed=${seed}&nologo=true`;
+      let imageUrl = null;
 
-      await new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = resolve;
-        img.onerror = reject;
-        img.src = imageUrl;
-        setTimeout(reject, 30000);
-      });
+      if (CONFIG.BACKEND_URL) {
+        // Use backend HuggingFace endpoint
+        const res = await fetch(`${CONFIG.BACKEND_URL}/api/image`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          imageUrl = data.image; // base64 data URL
+        }
+      }
+
+      // Fallback to Pollinations if no backend
+      if (!imageUrl) {
+        const encodedPrompt = encodeURIComponent(prompt);
+        const seed = Math.floor(Math.random() * 99999);
+        imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&seed=${seed}&nologo=true&model=turbo`;
+
+        await new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = resolve;
+          img.onerror = reject;
+          img.src = imageUrl;
+          setTimeout(reject, 30000);
+        });
+      }
 
       loadingEl.remove();
+
       const wrap = document.createElement('div');
       wrap.className = 'msg-image-wrap';
       wrap.innerHTML = `
-        <div class="msg-image-label">🎨 Generated image</div>
-        <img src="${imageUrl}" alt="${escapeHtmlLocal(prompt)}" onclick="window.open('${imageUrl}', '_blank')" />
-        <a class="img-download-btn" href="${imageUrl}" download="ciphermind-image.jpg" target="_blank">↓ Download</a>
+        <div class="msg-image-label">🎨 Generated — "${escapeHtmlLocal(prompt.substring(0, 50))}"</div>
+        <img src="${imageUrl}" alt="${escapeHtmlLocal(prompt)}" />
+        <br/>
+        <a class="img-download-btn" href="${imageUrl}" target="_blank" download="ciphermind-image.jpg">↓ Download</a>
       `;
+      wrap.querySelector('img').addEventListener('click', () => window.open(imageUrl, '_blank'));
       containerDiv.appendChild(wrap);
       document.getElementById('messages-area').scrollTop =
         document.getElementById('messages-area').scrollHeight;
+
     } catch (e) {
       loadingEl.remove();
       const errEl = document.createElement('div');
       errEl.style.cssText = 'font-size:13px;color:var(--red);margin-top:8px;';
-      errEl.textContent = '⚠️ Image generation failed. Try again.';
+      errEl.textContent = '⚠️ Image generation failed. Try again in a moment.';
       containerDiv.appendChild(errEl);
     }
   }

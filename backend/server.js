@@ -116,3 +116,28 @@ app.post('/api/chat', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ CipherMind backend running on port ${PORT}`);
 });
+
+app.post('/api/image', async (req, res) => {
+  const { prompt } = req.body;
+  const HF_KEY = process.env.HF_API_KEY;
+
+  const response = await fetch(
+    'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${HF_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ inputs: prompt }),
+    }
+  );
+
+  if (!response.ok) {
+    return res.status(500).json({ error: 'Image generation failed' });
+  }
+
+  const buffer = await response.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
+  res.json({ image: `data:image/jpeg;base64,${base64}` });
+});
