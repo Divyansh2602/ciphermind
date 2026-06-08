@@ -7,9 +7,9 @@
 ![Groq](https://img.shields.io/badge/AI-Groq%20LPU-f97316?style=for-the-badge)
 ![Free](https://img.shields.io/badge/Cost-$0-16a34a?style=for-the-badge)
 
-**A production-ready, end-to-end encrypted AI chatbot with vision AI, file upload, text-to-speech, chat history, and dark mode. Built with real browser-native cryptography and Groq's free inference API.**
+**A production-ready, end-to-end encrypted AI chatbot with vision AI, file upload, voice input, text-to-speech, chat history, and dark mode. Built with real browser-native cryptography and Groq's free inference API.**
 
-[🌐 Live Demo](ciphermind-frontend.vercel.app) · [⚙️ Backend](https://ciphermind-backend.onrender.com)
+[🌐 Live Demo](https://ciphermind.vercel.app) · [⚙️ Backend](https://ciphermind-backend.onrender.com)
 
 </div>
 
@@ -23,8 +23,9 @@
 | ⚡ **Groq AI** | Llama 3.3 70B, Mixtral, Gemma2 — free tier |
 | 📁 **File Upload** | PDF, images, txt — vision AI reads everything |
 | 🧠 **Vision AI** | Llama 4 Scout reads charts, tables, diagrams, images |
-| 💬 **Chat History** | Saved in localStorage, multiple sessions |
+| 🎤 **Voice Input** | Speak your message — converted to text in real time |
 | 🔊 **Text to Speech** | Browser-native, reads any AI response aloud |
+| 💬 **Chat History** | Saved in localStorage, multiple sessions |
 | 🌙 **Dark Mode** | Remembered across sessions |
 | 📊 **Crypto Inspector** | Click any message → see IV, HMAC, ciphertext |
 | 📱 **Fully Responsive** | Mobile, tablet, desktop |
@@ -101,7 +102,7 @@ BACKEND_URL: window.location.hostname === 'localhost'
 ## 🔐 Cryptographic Architecture
 
 ```
-User types message
+User types or speaks message
         │
         ▼
 PBKDF2 + SHA-512 (100,000 iterations)
@@ -154,6 +155,32 @@ Groq free tier: **14,400 requests/day** — no credit card needed.
 
 ---
 
+## 🎤 Voice Features
+
+CipherMind includes two complementary voice features — both completely free, no API key required, powered by the browser's built-in Web Speech API.
+
+### Voice Input (Speech → Text)
+Click the 🎤 microphone button next to the input box. The browser asks for mic permission once. Speak your message — words appear in the input box in real time as you talk. When you stop speaking, it captures the final transcript. Press Enter to send. The mic button pulses red while actively listening and returns to normal when done.
+
+### Text to Speech (Text → Voice)
+Every AI response has a 🔊 speaker button below it. Click to hear the response read aloud. Click again or click a different message's button to stop. The reader automatically cleans markdown formatting before speaking so you never hear "asterisk asterisk" or "hash hash". Works best in Chrome and Edge.
+
+---
+
+## 📁 File Upload & Vision AI
+
+Upload any file using the 📎 paperclip button:
+
+| File Type | How it's processed |
+|---|---|
+| Images (jpg, png, webp) | Sent directly to Llama 4 Scout vision model |
+| PDF documents | Each page rendered as image → vision model reads all |
+| Text files (.txt, .md, .csv) | Content extracted and sent as context |
+
+The vision model understands text, tables, charts, diagrams, handwriting, and visual layouts — not just raw text extraction.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -165,9 +192,9 @@ ciphermind/
 │   │   └── main.css          → Full responsive UI (light + dark)
 │   └── src/
 │       ├── config.js         → Auto-switches local/production URL
-│       ├── crypto.js         → AES-256-GCM + HMAC engine (120 lines)
+│       ├── crypto.js         → AES-256-GCM + HMAC engine
 │       ├── ui.js             → Animations, TTS, streaming, rendering
-│       └── app.js            → Chat logic, file upload, vision AI
+│       └── app.js            → Chat logic, voice, file upload, vision
 │
 └── backend/                  → Deploy on Render (free)
     ├── server.js             → Express proxy for Groq API
@@ -195,7 +222,7 @@ Click any message bubble to open the Crypto Inspector panel which shows:
 
 ## 🎤 Key Talking Points
 
-> *"Every message is AES-256-GCM encrypted using the browser's native Web Crypto API — the same standard used by Signal and TLS 1.3 — with zero external cryptographic dependencies. PBKDF2 at 100,000 iterations makes brute-force attacks computationally infeasible. Every message gets a unique random IV so identical inputs always produce completely different ciphertexts. The Crypto Inspector lets you click any message and see the real IV, HMAC signature, and ciphertext. The vision model can read uploaded images and PDF documents including tables, charts, and diagrams. All of this runs on completely free infrastructure."*
+> *"Every message is AES-256-GCM encrypted using the browser's native Web Crypto API — the same standard used by Signal and TLS 1.3 — with zero external cryptographic dependencies. PBKDF2 at 100,000 iterations makes brute-force attacks computationally infeasible. Every message gets a unique random IV so identical inputs always produce completely different ciphertexts. The Crypto Inspector lets you click any message and see the real IV, HMAC signature, and ciphertext. You can speak your message using the mic button and the AI response can be read back to you — all powered by browser-native APIs with no additional cost."*
 
 ---
 
@@ -203,7 +230,7 @@ Click any message bubble to open the Crypto Inspector panel which shows:
 
 | Criterion | Score | Reason |
 |---|---|---|
-| Technical Innovation | ⭐⭐⭐⭐⭐ | Real crypto, vision AI, streaming |
+| Technical Innovation | ⭐⭐⭐⭐⭐ | Real crypto, vision AI, voice I/O, streaming |
 | Code Quality | ⭐⭐⭐⭐⭐ | Modular, clean, well commented |
 | UI/UX | ⭐⭐⭐⭐⭐ | Responsive, dark mode, animations |
 | Practicality | ⭐⭐⭐⭐⭐ | Works immediately, zero setup |
