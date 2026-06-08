@@ -818,6 +818,62 @@ document.addEventListener('DOMContentLoaded', () => App.init());
   });
 })();
 
+// ── Rate Limit Tracker ────────────────────────────────────────────────────
+(function () {
+  const badge = document.getElementById('rate-badge');
+  const remaining = document.getElementById('rate-remaining');
+  if (!badge || !remaining) return;
+
+  // Only works in backend mode
+  if (!CONFIG.BACKEND_URL) {
+    badge.style.display = 'none';
+    return;
+  }
+
+  async function fetchStatus() {
+    try {
+      const res = await fetch(`${CONFIG.BACKEND_URL}/api/status`);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      const left = data.remaining;
+      remaining.textContent = left;
+
+      // Update color based on remaining
+      badge.classList.remove('warning', 'danger');
+      if (left <= 5) {
+        badge.classList.add('danger');
+        if (left === 0) {
+          UI.toast(`⚠️ Rate limit reached. Resets at ${data.resetTime || 'soon'}.`, 'error');
+        }
+      } else if (left <= 15) {
+        badge.classList.add('warning');
+      }
+
+      // Update tooltip
+      badge.title = data.resetTime
+        ? `${left} requests left — resets at ${data.resetTime}`
+        : `${left} of 50 requests remaining in this 15-minute window`;
+
+    } catch {}
+  }
+
+  // Fetch on load
+  fetchStatus();
+
+  // Fetch after every message send
+  const sendBtn = document.getElementById('send-btn');
+  if (sendBtn) {
+    const observer = new MutationObserver(() => {
+      // When sending class is removed (message finished), update counter
+      if (!sendBtn.classList.contains('sending')) {
+        setTimeout(fetchStatus, 500);
+      }
+    });
+    observer.observe(sendBtn, { attributes: true, attributeFilter: ['class'] });
+  }
+})();
+
 // ── Speech to Text ────────────────────────────────────────────────────────
 (function () {
   const micBtn = document.getElementById('mic-btn');

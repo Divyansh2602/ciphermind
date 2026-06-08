@@ -1444,3 +1444,38 @@
 @media (max-width: 599px) {
   .mic-btn { width: 42px; height: 42px; min-width: 42px; }
 }
+
+/* ── Rate Limit Badge ── */
+.rate-badge {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  padding: 3px 10px;
+  background: var(--green-light);
+  border: 1px solid #86efac;
+  border-radius: 999px;
+  color: var(--green);
+  white-space: nowrap;
+  transition: all 0.3s;
+}
+.rate-badge.warning {
+  background: var(--yellow-light);
+  border-color: #fcd34d;
+  color: var(--yellow);
+}
+.rate-badge.danger {
+  background: var(--red-light);
+  border-color: #fca5a5;
+  color: var(--red);
+}
+body.dark .rate-badge {
+  background: var(--green-light);
+  border-color: #166534;
+}
+body.dark .rate-badge.warning {
+  background: var(--yellow-light);
+  border-color: #854d0e;
+}
+body.dark .rate-badge.danger {
+  background: var(--red-light);
+  border-color: #991b1b;
+}

@@ -12,6 +12,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -21,6 +22,20 @@ app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   methods: ['POST', 'GET'],
 }));
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Too many requests — please wait a few minutes.'
+    });
+  }
+});
+
+app.use('/api/', limiter);
 
 const SYSTEM_PROMPT = `You are CipherMind, a smart and friendly AI assistant inside an encrypted chat app powered by Groq.
 Be helpful, warm, and conversational. When relevant, mention that the chat uses AES-256-GCM encryption.
@@ -32,6 +47,21 @@ app.get('/', (req, res) => {
   res.json({
     status: 'CipherMind backend running',
     timestamp: new Date().toISOString()
+  });
+});
+
+// Rate limit status endpoint
+app.get('/api/status', limiter, (req, res) => {
+  const remaining = res.getHeader('RateLimit-Remaining') ?? 50;
+  const reset = res.getHeader('RateLimit-Reset');
+  const resetTime = reset
+    ? new Date(reset * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
+  res.json({
+    remaining: Number(remaining),
+    limit: 50,
+    resetTime
   });
 });
 
@@ -116,3 +146,17 @@ app.post('/api/chat', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ CipherMind backend running on port ${PORT}`);
 });
+
+// ── Keep Render warm ──────────────────────────────────────────────────────
+const BACKEND_URL = process.env.RENDER_EXTERNAL_URL || null;
+
+if (BACKEND_URL) {
+  setInterval(async () => {
+    try {
+      await fetch(`${BACKEND_URL}/`);
+      console.log('🏓 Keep-alive ping sent');
+    } catch (e) {
+      console.log('⚠️ Keep-alive ping failed:', e.message);
+    }
+  }, 10 * 60 * 1000); // every 10 minutes
+}
