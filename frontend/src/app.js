@@ -583,6 +583,7 @@ Analyze PDF pages thoroughly — extract all text, describe tables, explain char
         aiText = result.choices[0]?.message?.content || 'No response.';
         UI.bumpStat('tokens', result.usage?.total_tokens || 1);
         document.getElementById('speed-badge').textContent = `⚡ ${((Date.now() - t1) / 1000).toFixed(1)}s`;
+        UI.finalizeStreamingMessage(streamDiv, aiText);
         thinking.stop();
         UI.removeThinking();
         UI.renderMessage({ role: 'ai', text: aiText, cipherHex: null, fullData: null });
