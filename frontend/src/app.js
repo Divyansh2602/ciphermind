@@ -495,54 +495,6 @@ Analyze PDF pages thoroughly — extract all text, describe tables, explain char
     document.getElementById('send-btn').classList.add('sending');
     UI.animatePipeline(4000);
 
-    // ── Image generation check FIRST ─────────────────────────────────
-    if (!fileInfo.hasFile && isImageRequest(rawText)) {
-      const imagePrompt = extractImagePrompt(rawText);
-      UI.toast('🎨 Generating image...', 'info');
-
-      // Encrypt for display
-      let encResult;
-      try {
-        encResult = await CryptoEngine.encrypt(rawText);
-        UI.bumpStat('enc');
-      } catch {}
-
-      UI.renderMessage({
-        role: 'user',
-        text: rawText,
-        cipherHex: encResult?.cipherHex || null,
-        fullData: null
-      });
-
-      // AI message container
-      const imgMsgDiv = document.createElement('div');
-      imgMsgDiv.className = 'message ai';
-      imgMsgDiv.innerHTML = `
-        <div class="msg-avatar">🤖</div>
-        <div class="msg-body">
-          <div class="msg-meta">
-            <span class="msg-name">CipherMind</span>
-            <span class="msg-time">${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}</span>
-          </div>
-          <div class="msg-bubble" id="img-bubble-content">
-            <span style="font-size:13px;color:var(--text-3);">Here's your image for: <em>${escapeHtmlLocal(imagePrompt)}</em></span>
-          </div>
-        </div>
-      `;
-      document.getElementById('messages-list').appendChild(imgMsgDiv);
-      document.getElementById('welcome').style.display = 'none';
-
-      await generateAndShowImage(imagePrompt, imgMsgDiv.querySelector('#img-bubble-content'));
-
-      conversationHistory.push({ role: 'user', content: rawText });
-      conversationHistory.push({ role: 'assistant', content: `Generated image for: "${imagePrompt}"` });
-      saveCurrentChat();
-
-      isSending = false;
-      document.getElementById('send-btn').classList.remove('sending');
-      return;
-    }
-
     const t0 = Date.now();
 
     // Encrypt user message
