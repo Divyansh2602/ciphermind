@@ -1410,3 +1410,37 @@
     .thinking-dots span, .send-btn.sending { animation: none; }
     .msg-bubble, .chip, .connect-btn { transition: none; }
   }
+
+  /* ── Speech to Text ── */
+.mic-btn {
+  width: 46px; height: 46px;
+  min-width: 46px;
+  background: var(--surface2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 22px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.mic-btn:hover { border-color: var(--accent); background: var(--accent-light); }
+.mic-btn:active { transform: scale(0.95); }
+.mic-btn.listening {
+  background: var(--red-light);
+  border-color: var(--red);
+  animation: micPulse 1s ease infinite;
+}
+.mic-btn.listening:hover { background: var(--red-light); }
+
+@keyframes micPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(220,38,38,0); }
+}
+
+@media (max-width: 599px) {
+  .mic-btn { width: 42px; height: 42px; min-width: 42px; }
+}

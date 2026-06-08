@@ -817,3 +817,90 @@ document.addEventListener('DOMContentLoaded', () => App.init());
     localStorage.setItem('ciphermind_theme', isDark ? 'dark' : 'light');
   });
 })();
+
+// ── Speech to Text ────────────────────────────────────────────────────────
+(function () {
+  const micBtn = document.getElementById('mic-btn');
+  if (!micBtn) return;
+
+  // Check browser support
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    micBtn.style.opacity = '0.3';
+    micBtn.title = 'Speech recognition not supported in this browser';
+    micBtn.disabled = true;
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false;       // stop after one sentence
+  recognition.interimResults = true;    // show words as they come in
+  recognition.lang = 'en-US';
+
+  let isListening = false;
+  let finalTranscript = '';
+
+  micBtn.addEventListener('click', () => {
+    if (isListening) {
+      recognition.stop();
+      return;
+    }
+    finalTranscript = '';
+    recognition.start();
+  });
+
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.textContent = '⏹️';
+    micBtn.classList.add('listening');
+    UI.toast('Listening... speak now', 'info');
+  };
+
+  recognition.onresult = (event) => {
+    const input = document.getElementById('user-input');
+    let interimTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+
+    // Show interim results in real time
+    input.value = finalTranscript + interimTranscript;
+    UI.autoResize(input);
+    document.getElementById('char-count').textContent =
+      `${input.value.length} chars`;
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    micBtn.textContent = '🎤';
+    micBtn.classList.remove('listening');
+
+    // Auto-send if we got something
+    const input = document.getElementById('user-input');
+    if (finalTranscript.trim()) {
+      input.value = finalTranscript.trim();
+      UI.autoResize(input);
+      UI.toast('Voice captured — press Enter to send', 'success');
+    }
+  };
+
+  recognition.onerror = (event) => {
+    isListening = false;
+    micBtn.textContent = '🎤';
+    micBtn.classList.remove('listening');
+
+    if (event.error === 'not-allowed') {
+      UI.toast('Microphone permission denied', 'error');
+    } else if (event.error === 'no-speech') {
+      UI.toast('No speech detected — try again', 'info');
+    } else {
+      UI.toast('Voice error: ' + event.error, 'error');
+    }
+  };
+})();
