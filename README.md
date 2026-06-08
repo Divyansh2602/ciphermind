@@ -11,7 +11,7 @@
 
 **A production-ready, end-to-end encrypted AI chatbot with vision AI, file upload, voice input, text-to-speech, chat history, and dark mode. Built with real browser-native cryptography and Groq's free inference API.**
 
-[🌐 Live Demo](https://ciphermind.vercel.app) · [⚙️ Backend](https://ciphermind-backend.onrender.com)
+[🌐 Live Demo](https://ciphermind-frontend.vercel.app/) · [⚙️ Backend](https://ciphermind-backend.onrender.com)
 
 </div>
 
