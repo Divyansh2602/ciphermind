@@ -1,3 +1,5 @@
+![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
+
 # 🔐 CipherMind — Encrypted AI Chatbot
 
 <div align="center">
